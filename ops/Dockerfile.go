@@ -3,12 +3,12 @@ WORKDIR /app
 COPY apps/settlement/go.mod apps/settlement/go.sum* ./
 RUN go mod download
 COPY apps/settlement/ .
-
-# Doğrudan main.go'nun bulunduğu alt dizini derliyoruz
 RUN CGO_ENABLED=0 GOOS=linux go build -o /settlement ./cmd/settlement
 
-FROM alpine:latest
-WORKDIR /root/
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates && adduser -D -u 10001 app
+WORKDIR /app
 COPY --from=builder /settlement .
+USER app
 EXPOSE 8091
 CMD ["./settlement", "daemon"]
