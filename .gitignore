@@ -1,8 +1,2 @@
-node_modules/
-dist/
-*.tsbuildinfo
-.env
-.env.local
-npm-debug.log*
-.DS_Store
-.claude/
+ops/.env.docker
+**/node_modules
