@@ -42,6 +42,10 @@ test("bhd formats integer fils via @filspay/money, never float arithmetic", () =
   assert.equal(bhd(1), "0.001 BHD");
   assert.equal(bhd(1000), "1.000 BHD");
   assert.equal(bhd(1234567), "1234.567 BHD");
+  // hatice: refund events carry a negative amount_fils (0044). Before this
+  // fix bhd(-7000) threw RangeError and the timeline crashed; the dashboard
+  // must render the minus sign, not blow up.
+  assert.equal(bhd(-7000), "-7.000 BHD");
 });
 
 test("dash renders absent values as an em dash but keeps zero", () => {

@@ -58,16 +58,26 @@ test("applyAdjustmentImport records the batch and its rows", async () => {
   });
 
   assert.equal(result.rowCount, 2);
-  assert.equal(result.totalPostedFils, 600);
+  // hatice:
+  //   what's wrong: this assertion encoded the old parseDecimalMinor result
+  //     (4.75 -> 475, 1.25 -> 125, total 600), which read "4.75" as 475 fils.
+  //     BHD has three decimals: 4.75 BD is 4,750 fils, not 475.
+  //   why: adjustmentCsvParsing now uses parseBhdToFils (correct BHD
+  //     semantics) instead of toFils(parseDecimalMinor(raw)); the test still
+  //     asserted the pre-fix values.
+  //   what it breaks: nothing — the test was pinning the bug. Left as-is it
+  //     forces CSV imports to under-credit every merchant by 10x.
+  //   the fix: assert the correct fils (4750 + 1250 = 6000).
+  assert.equal(result.totalPostedFils, 6000);
 
   const rows = await getAdjustmentImportRows(pool, result.importId);
   assert.equal(rows.length, 2);
   assert.equal(rows[0]!.rowNumber, 1);
   assert.equal(rows[0]!.rawAmountText, "4.75");
-  assert.equal(rows[0]!.parsedAmountFils, 475);
+  assert.equal(rows[0]!.parsedAmountFils, 4750);
   assert.equal(rows[0]!.reason, "statement correction");
   assert.equal(rows[1]!.rawAmountText, "1.25");
-  assert.equal(rows[1]!.parsedAmountFils, 125);
+  assert.equal(rows[1]!.parsedAmountFils, 1250);
   assert.equal(rows[1]!.reason, null);
 });
 
@@ -121,9 +131,12 @@ test("applyAdjustmentImport reverses leg direction for a negative amount", async
   );
   assert.deepEqual(
     legs.rows.map((r) => [r.account_id, r.direction, Number(r.amount_fils)]),
+    // hatice: -3.50 BD is -3500 fils (BHD has 3 decimals). The old
+    // parseDecimalMinor path produced 350 (100x under); parseBhdToFils is
+    // correct, so the leg magnitude is 3500.
     [
-      ["manual_balance_adjustment_contra", "credit", 350],
-      ["merchant_payable", "debit", 350],
+      ["manual_balance_adjustment_contra", "credit", 3500],
+      ["merchant_payable", "debit", 3500],
     ],
   );
 });
@@ -145,7 +158,9 @@ test("applyAdjustmentImport updates the merchant balance cache", async () => {
     `SELECT cached_payable_fils FROM merchant_balances WHERE merchant_id = $1`,
     [merchantId],
   );
-  assert.equal(Number(balance.rows[0]!.cached_payable_fils), 500);
+  // hatice: 4.00 BD + 1.00 BD is 4000 + 1000 = 5000 fils, not 500. The
+  // 500 expectation came from the old 100x-under parseDecimalMinor values.
+  assert.equal(Number(balance.rows[0]!.cached_payable_fils), 5000);
 });
 
 test("applyAdjustmentImport links each row to its ledger group", async () => {

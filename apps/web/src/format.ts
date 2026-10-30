@@ -6,10 +6,25 @@ import { formatBhd, toFils } from "@filspay/money";
  * so there is exactly one answer to "how is a BHD amount shown" across both
  * halves of this app. Never `/1000`, never `toFixed`.
  */
-// FH: toFils without allowNegative throws on a negative — refund events / negative gaps crash the page?
-// MK: amounts are never negative in the dashboard. ignore
+// hatice:
+//   what's wrong: bhd calls toFils(amountFils) with the default
+//     allowNegative:false, so a negative amount throws a RangeError and
+//     unmounts the whole page. The transaction timeline renders
+//     transaction_events.amount_fils, which 0044 makes negative for refund
+//     events, so opening any refunded transaction crashes the detail page.
+//   why: the guard was written when every caller passed a non-negative
+//     amount (settlement gross/fee/net). The assumption stopped holding when
+//     the timeline started rendering refund events, whose amount_fils is
+//     deliberately negative.
+//   what it breaks: TransactionDetailPage throws on bhd(event.amountFils)
+//     for any refund_partial/refunded event; ReconciliationPage throws on
+//     a negative gapFils. The refund feature is unreachable in the UI even
+//     though the API and drawer work.
+//   the fix: pass { allowNegative: true } to toFils. formatBhd already
+//     renders a leading "-" correctly, so this is display-only and does not
+//     change any call that passes 0 or a positive amount.
 export function bhd(amountFils: number): string {
-  return `${formatBhd(toFils(amountFils))} BHD`;
+  return `${formatBhd(toFils(amountFils, { allowNegative: true }))} BHD`;
 }
 
 /** `—` for a null/absent value, so an empty table cell is visibly empty

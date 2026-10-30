@@ -35,9 +35,6 @@ export async function rotateApiKeyAsAdmin(
       rotatedFromKeyId: input.apiKeyId,
     });
 
-    //Hatice revokes old key
-    await client.query(`UPDATE api_keys SET revoked_at = now() WHERE id = $1`, [input.apiKeyId]);
-
     await insertAdminAuditLog(client, {
       adminUserId: input.adminUserId,
       action: "api_key_rotate",

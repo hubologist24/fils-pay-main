@@ -105,7 +105,10 @@ test("a valid CSV upload returns 201 and applies every row", async () => {
 
   const body = res.json() as { importId: string; rowCount: number; totalPostedFils: number };
   assert.equal(body.rowCount, 2);
-  assert.equal(body.totalPostedFils, 600);
+  // hatice: 4.75 BD is 4750 fils, not 475. parseBhdToFils fixed the parser;
+  // this endpoint-level assertion still expected the old under-credited total
+  // (475 + 125 = 600). Correct value is 4750 + 1250 = 6000.
+  assert.equal(body.totalPostedFils, 6000);
 
   const rows = await pool.query<{ n: string }>(
     `SELECT COUNT(*)::text AS n FROM adjustment_import_rows WHERE adjustment_import_id = $1`,
@@ -233,8 +236,9 @@ test("the import history lists past uploads and is readable by any admin role", 
   assert.equal(match.originalFilename, "history.csv");
 });
 
-// 4.75 -> 475 here. matches the README money section (1250 fils = 12.50 BD) — FH
-// MK: BD has 3 decimals?? 4.75 BD is 4750 fils
+// hatice: MK was right — BD has 3 decimals, 4.75 BD is 4750 fils. The parser
+// now uses parseBhdToFils and produces 4750/1250; the old 475/125 expectation
+// (and the README line FH cited) described the pre-fix, 100x-under behaviour.
 // am: the import format is 2dp by agreement with finance. fine
 test("per-row detail shows the raw text next to the parsed integer", async () => {
   const admin = await signedInAdmin("finance");

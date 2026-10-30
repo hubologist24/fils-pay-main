@@ -234,6 +234,115 @@ test("the refund's ledger group balances and reverses the fee that was charged",
   assert.equal(byLeg.get("merchant_payable:credit"), 250);
 });
 
+test("partial refunds' reversed fees sum to exactly the capture's original fee", async () => {
+  // hatice:
+  //   what's wrong: the only fee-reversal integration test above does a single
+  //     full refund, so calculateRefundFee is exercised once and trivially
+  //     returns the whole fee. Nothing proves that *partial* refunds, summed,
+  //     reverse exactly the capture's original fee.
+  //   why: calculateRefundFee is proportional (fee * refundAmount / captured).
+  //     With per-refund banker's rounding on uneven splits, an off-by-one in
+  //     the formula can leak a fil per refund and never surface, because no
+  //     test accumulates the reversals.
+  //   what it breaks: a rounding drift would silently over/under-reverse
+  //     platform_fee_revenue across partial refunds; the merchant's net
+  //     payout would be off by a few fils that compound, and the ledger would
+  //     still look balanced group-by-group.
+  //   the fix: refund an uneven split (3_333 + 3_333 + 3_334 of a 10_000
+  //     capture with a 250-fil fee) and assert SUM(fee_reversed_fils) = 250.
+  const merchant = await createApprovedMerchantWithApiKey("refund-partial-fee-sum", 250);
+  const txn = await capturedTransaction(merchant.rawKey, 10_000);
+  const actor = await apiKeyActor(merchant.merchantId);
+
+  for (const amount of [3_333, 3_333, 3_334]) {
+    const result = await processRefund(pool, approvingAcquirer, {
+      transactionId: txn.id,
+      merchantId: merchant.merchantId,
+      amountFils: toFils(amount),
+      idempotencyKey: randomUUID(),
+      actor,
+    });
+    assert.equal(result.statusCode, 200, JSON.stringify(result.body));
+  }
+
+  const sum = await pool.query<{ total: string }>(
+    `SELECT COALESCE(SUM(fee_reversed_fils), 0)::text AS total
+       FROM refunds WHERE transaction_id = $1`,
+    [txn.id],
+  );
+  assert.equal(
+    Number(sum.rows[0]!.total),
+    250,
+    "partial refunds' reversed fees must sum to the capture's original fee",
+  );
+});
+
+test("outbox failure rolls back the refund and its ledger legs atomically", async () => {
+  // hatice:
+  //   what's wrong: nothing asserted that the refund INSERT, ledger legs, and
+  //     outbox event commit together. The code puts enqueueEvent(client) inside
+  //     the same withTransaction as the ledger and refund writes (processRefund.ts
+  //     ~157-308), but a future refactor could split them and no test would fail.
+  //   why: same-transaction atomicity is an invariant, not an accident — if the
+  //     outbox INSERT succeeds on its own, a webhook fires for a refund that
+  //     never committed to the ledger; if the refund commits without the event,
+  //     the merchant is debited and the webhook consumer never hears.
+  //   what it breaks: refund/ledger/outbox divergence; silent lost webhooks or
+  //     phantom refunds.
+  //   the fix: block refund.succeeded at the DB level for this test only, attempt
+  //     a refund, assert it rejects, and assert no refunds/ledger_entries rows
+  //     remain for the transaction.
+  const merchant = await createApprovedMerchantWithApiKey("refund-outbox-rollback");
+  const txn = await capturedTransaction(merchant.rawKey, 10_000);
+  const actor = await apiKeyActor(merchant.merchantId);
+
+  // hatice:
+  //   what's wrong: ADD CONSTRAINT validates existing rows too, and the
+  //     shared DB already holds refund.succeeded events from earlier tests
+  //     ("a successful refund enqueues exactly one refund.succeeded outbox
+  //     event"). PostgreSQL rejects the constraint with 23514 "violated by
+  //     some row" before the refund attempt even runs.
+  //   why: CHECK constraints are validated against existing data unless
+  //     declared NOT VALID; this test only needs to block *new* inserts.
+  //   what it breaks: without NOT VALID the atomicity test never reaches the
+  //     refund attempt, so the rollback invariant goes unproven.
+  //   the fix: add the constraint NOT VALID — it blocks new refund.succeeded
+  //     inserts (which is all this test needs) while leaving pre-existing
+  //     rows alone. Still dropped in finally.
+  await pool.query(`ALTER TABLE outbox_events DROP CONSTRAINT IF EXISTS test_block_refund_outbox`);
+  await pool.query(`
+    ALTER TABLE outbox_events
+      ADD CONSTRAINT test_block_refund_outbox
+      CHECK (event_type <> 'refund.succeeded') NOT VALID
+  `);
+  try {
+    await assert.rejects(
+      processRefund(pool, approvingAcquirer, {
+        transactionId: txn.id,
+        merchantId: merchant.merchantId,
+        amountFils: toFils(2_000),
+        idempotencyKey: randomUUID(),
+        actor,
+      }),
+      /test_block_refund_outbox/,
+    );
+
+    const refunds = await pool.query(`SELECT count(*)::int AS c FROM refunds WHERE transaction_id = $1`, [txn.id]);
+    assert.equal(refunds.rows[0]!.c, 0, "the refund row must roll back with the failed outbox INSERT");
+
+    const ledger = await pool.query(
+      `SELECT count(*)::int AS c FROM ledger_entries WHERE transaction_id = $1 AND description LIKE 'refund:%'`,
+      [txn.id],
+    );
+    assert.equal(ledger.rows[0]!.c, 0, "no refund ledger legs may survive the rollback");
+
+    const txnRow = await pool.query(`SELECT refunded_fils FROM transactions WHERE id = $1`, [txn.id]);
+    assert.equal(Number(txnRow.rows[0]!.refunded_fils), 0, "transactions.refunded_fils must be untouched");
+  } finally {
+    await pool.query(`ALTER TABLE outbox_events DROP CONSTRAINT IF EXISTS test_block_refund_outbox`);
+  }
+});
+
 test("a partial refund lands on partially_refunded with a refund_partial event", async () => {
   const merchant = await createApprovedMerchantWithApiKey("partial-refund");
   const txn = await capturedTransaction(merchant.rawKey, 10_000);

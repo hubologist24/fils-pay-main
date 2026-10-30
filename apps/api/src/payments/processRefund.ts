@@ -203,10 +203,32 @@ export async function processRefund(
     const newRefundedTotal = toFils(Number(refreshedTxn.rows[0]!.refunded_fils));
     const newStatus = refreshedTxn.rows[0]!.status;
 
-    const feeReversedFils = calculateRefundFee(
-      capturedFils,
-      prepared.feeChargedFils,
-      prepared.requestedAmount,
+  // hatice:
+    //   what's wrong: calculateRefundFee is pure proportional — it rounds
+    //     each refund's fee share independently, with no carry between
+    //     refunds. Over an uneven split (3_333 + 3_333 + 3_334 of a 10_000
+    //     capture with a 250-fil fee) the rounded shares sum to 249, not 250,
+    //     so the merchant loses one fil of fee reversal on the last refund.
+    //   why: bankersRoundDiv(250 * 3_333 / 10_000) = 83, taken three times,
+    //     plus 83 for the last slice = 249. The fractional fil discarded on
+    //     each partial refund is never carried forward.
+    //   what it breaks: the final partial refund of a fully refunded capture
+    //     leaves platform_fee_revenue over-credited by a fil (or
+    //     under-credited on other splits), even though every individual
+    //     ledger group still balances. The merchant's net payout drifts by a
+    //     few fils, silently, and no other test catches it because no test
+    //     accumulates the reversals.
+    //   the fix: reverse the difference of two cumulative rounded shares,
+    //     not one independent share. calculateRefundFee(newRefundedTotal) -
+    //     calculateRefundFee(previousRefundedTotal) lands the final refund on
+    //     exactly the full fee, regardless of how the refunds were split.
+    //     previousRefundedTotal is derived as newRefundedTotal - requestedAmount
+    //     because the pre-refund total (refundedFils) is scoped to the earlier
+    //     validation transaction, not this one.
+    const previousRefundedTotal = subtractFils(newRefundedTotal, prepared.requestedAmount);
+    const feeReversedFils = subtractFils(
+      calculateRefundFee(capturedFils, prepared.feeChargedFils, newRefundedTotal),
+      calculateRefundFee(capturedFils, prepared.feeChargedFils, previousRefundedTotal),
     );
 
     const refundResult = await client.query<{ id: string; occurred_at: Date }>(

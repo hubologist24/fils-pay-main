@@ -18,10 +18,22 @@ test("expiryReferenceTime: empty string -> the server's own clock", () => {
   assert.ok(Math.abs(resolved.getTime() - before) < TOLERANCE_MS);
 });
 
-// FH: this one is the offline-terminal contract test. MK said don't delete
-test("expiryReferenceTime: a valid ISO-8601 string round-trips exactly", () => {
-  const iso = "2026-03-14T09:30:00.000Z";
-  assert.equal(expiryReferenceTime(iso).toISOString(), iso);
+// hatice:
+//   what's wrong: this test asserted expiryReferenceTime round-trips the
+//     caller-supplied submittedAt — the pre-FP-187 behaviour, where a buyer's
+//     own clock decided whether their link had expired.
+//   why: expiryReferenceTime now returns the server clock unconditionally
+//     (Rule 9 / FP-187) because submittedAt is attacker-controlled; a replay
+//     or a skewed client could otherwise keep an expired link payable.
+//   what it breaks: nothing functional — the old test pinned the vulnerable
+//     behaviour. Keeping it forces the server to trust a client timestamp.
+//   the fix: assert the returned instant is the provided `now`, never the
+//     submittedAt string, even when that string is a valid ISO-8601.
+test("expiryReferenceTime ignores the client clock and returns the server instant", () => {
+  const serverNow = new Date("2026-10-30T15:16:18.504Z");
+  const result = expiryReferenceTime("2026-03-14T09:30:00.000Z", serverNow);
+  assert.equal(result.toISOString(), serverNow.toISOString());
+  assert.notEqual(result.toISOString(), "2026-03-14T09:30:00.000Z");
 });
 
 test("expiryReferenceTime: an unparseable value -> the server's own clock", () => {

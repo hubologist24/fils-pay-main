@@ -91,6 +91,27 @@ test("lookupSession finds an active, promoted session", async () => {
   assert.equal(found.role, "owner");
 });
 
+test("lookupSession returns null for a pending (pre-OTP) session", async () => {
+  // hatice:
+  //   what's wrong: nothing asserted that a pre-OTP session is invisible to
+  //     lookupSession. The existing tests only cover promoted/revoked/expired,
+  //     so a view that forgot `authenticated = true` passed the suite.
+  //   why: live_sessions filtered revoked_at and expires_at but not
+  //     authenticated, and this gap had no failing test.
+  //   what it breaks: requireMerchantAuth accepted half-logged-in sessions on
+  //     every gated route, including refunds.
+  //   the fix: assert lookupSession returns null for an authenticated=false row.
+  const merchantUserId = await createMerchantUser("pending");
+  const rawToken = await insertSession({
+    merchantUserId,
+    authenticated: false,
+    expiresAt: hoursFromNow(12),
+  });
+
+  assert.equal(await lookupSession(pool, rawToken), null,
+    "a pending session must not resolve as authenticated");
+});
+
 test("lookupSession returns null for an unknown token", async () => {
   // Never inserted anywhere — a well-formed token that simply isn't a session.
   assert.equal(await lookupSession(pool, randomToken(32)), null);
