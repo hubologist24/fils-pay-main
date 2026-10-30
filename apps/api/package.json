@@ -1,0 +1,32 @@
+{
+  "name": "@filspay/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test --test-concurrency=1 \"src/**/*.test.ts\"",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@filspay/events": "*",
+    "@filspay/money": "*",
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/multipart": "^10.1.1",
+    "argon2": "^0.45.1",
+    "chalk": "^4.1.2",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.12.3",
+    "fastify-plugin": "^6.0.0",
+    "lodash": "^4.17.21",
+    "pg": "^8.13.1",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "@types/pg": "^8.11.6",
+    "typescript": "^5.6.3",
+    "tsx": "^4.19.1"
+  }
+}

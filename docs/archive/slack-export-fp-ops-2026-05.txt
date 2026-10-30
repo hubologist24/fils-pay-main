@@ -1,0 +1,69 @@
+Slack export — #fp-ops
+Range: 2026-05-13 00:00 — 2026-06-06 23:59 (Asia/Bahrain)
+Exported by: mk  |  Format: plain text, threads inlined, reactions as [:name: N]
+--------------------------------------------------------------------------------
+
+[2026-05-13 22:47] Noor (support): Gamma's front desk says a guest paid the deposit link twice. Two receipts, same link FP-PL-8841. Anyone around?
+[2026-05-13 22:51] Noor (support): second one: Delta Marketplace, link for a bulk order, two different cardholders both got "payment successful"
+[2026-05-13 22:52] Noor (support): link status shows `paid`, transaction list shows two captures against it
+    [:eyes: 2]
+[2026-05-13 23:05] Ali Marzooq: looking. both pairs are ~60-70s apart
+[2026-05-13 23:06] Ali Marzooq: first payer's capture is slow, second payer opens the link while the first is still spinning
+[2026-05-13 23:09] Mahmood Khalil: is the acquirer sandbox doing the callback retry thing again? Check acquirer_callback_notes for those ids
+[2026-05-13 23:14] Ali Marzooq: there are two callback notes for the Gamma one, yes
+[2026-05-13 23:15] Mahmood Khalil: there it is. duplicate callback → applied twice → second capture. We don't dedupe callbacks yet
+    [:dart: 3] [:+1: 2]
+[2026-05-13 23:17] Ali Marzooq: hm, but the two notes have different transaction ids. it's not the same callback twice, it's one callback per transaction
+[2026-05-13 23:18] Mahmood Khalil: the simulator reuses callbackIds across transactions sometimes, it's the same thing. I'll write it up tomorrow
+[2026-05-13 23:21] Noor (support): what do I tell Gamma?
+[2026-05-13 23:22] Mahmood Khalil: void the second one if it hasn't settled. if it has, refund... which we can't do yet. issue a credit
+[2026-05-13 23:22] Noor (support): ok 👍
+    [:white_check_mark: 1]
+
+[2026-05-14 03:10] Sayed (support): morning shift. 4 more double-paid links overnight, all Delta Marketplace. list in thread
+    ↳ [03:11] Sayed (support): FP-PL-8850, FP-PL-8853, FP-PL-8853 (third time??), FP-PL-8861
+    ↳ [03:40] Ali Marzooq: 8853 has three captures. Callback theory doesn't explain three
+    ↳ [03:41] Ali Marzooq: all of these: the first attempt took longer than a minute at the acquirer
+    ↳ [08:02] Mahmood Khalil: three = callback retried twice. same root cause
+[2026-05-14 08:05] Mahmood Khalil: declaring this an incident. incident 2026-05-14, I'll own the write-up. Pausing payment links for Delta Marketplace for now
+    [:rotating_light: 4]
+[2026-05-14 08:30] Fatima Haji: also seeing holds staying `active` after void on two of the Gamma ones. related?
+[2026-05-14 08:33] Mahmood Khalil: probably the same callback being applied after the void
+[2026-05-14 08:40] Fatima Haji: I asked Claude to look at void.ts and pay.ts together. It says the claim UPDATE in pay.ts re-checks the WHERE under READ COMMITTED so two payers can't both claim. so it agrees it's not pay.ts
+    [:+1: 1]
+[2026-05-14 08:41] Ali Marzooq: the claim is fine. it's what happens after the reservation runs out that I'm not sure about
+[2026-05-14 08:41] Mahmood Khalil: there's no "after", once it's claimed it's claimed
+[2026-05-14 09:15] Huda (finance): for my side: how many of these settled already? I need the list before 14:00
+[2026-05-14 09:52] Mahmood Khalil: 3 settled in the 13th batch, rest voided. Credits issued for the 3. list in the incident doc
+[2026-05-14 11:20] Mahmood Khalil: hotfix deployed: callbacks are deduped on callbackId now (processed_events). Re-enabling links for Delta Marketplace
+    [:tada: 5] [:white_check_mark: 2]
+[2026-05-14 11:24] Ali Marzooq: which PR? I don't see a migration for processed_events
+[2026-05-14 11:31] Mahmood Khalil: it's in the callbacks handler, no migration needed for the first cut
+[2026-05-14 16:48] Noor (support): Delta Marketplace again, FP-PL-8902 two captures. after the fix?
+[2026-05-14 16:55] Mahmood Khalil: that one was created before the deploy, cached link page on the customer's phone. should be the last one
+[2026-05-14 16:57] Ali Marzooq: created 15:02, deploy was 11:20
+[2026-05-14 17:30] Mahmood Khalil: I'll check tomorrow. marking incident resolved, monitoring
+    [:white_check_mark: 3]
+
+[2026-05-15 10:04] Fatima Haji: postmortem draft is in docs/incidents. please add anything I missed
+[2026-05-15 10:06] Fatima Haji: also linked FP-198 since the timing thing looks similar
+[2026-05-15 10:20] Ali Marzooq: FP-198 is the DST batch thing, nothing to do with links
+[2026-05-15 10:21] Mahmood Khalil: keep it linked, both are timing. if one is fixed the other might be too
+
+[2026-05-19 09:12] Sayed (support): any update on 8902? merchant asking
+[2026-05-19 09:30] Mahmood Khalil: credited. not seen another since
+[2026-05-19 09:31] Sayed (support): ok closing on my side
+
+[2026-05-22 13:02] Ali Marzooq: one more data point for whoever picks this up later: Delta Marketplace's links are the big basket ones. their captures are the slowest at the acquirer (multi-line, 3DS step-up). every double I looked at had a first attempt > 60 s. The callback count is 1 per transaction in every case I looked at
+    [:eyes: 1]
+[2026-05-22 13:20] Mahmood Khalil: noted. postmortem's closed, if it recurs reopen
+
+--------------------------------------------------------------------------------
+[2026-06-01 15:10] Mahmood Khalil: new in the console for finance+: **Rebuild cached balances** (834f6b0). If a balance looks off, hit it. It's cache-only, can't hurt anything
+    [:raised_hands: 4] [:rocket: 2]
+[2026-06-01 15:14] Ali Marzooq: does it run the same thing as `settlement rebuild-balances`?
+[2026-06-01 15:15] Mahmood Khalil: same thing, through the internal API
+[2026-06-03 10:41] Noor (support): rebuilt balances for Alpha after a phone call. looks right now 👍
+    [:white_check_mark: 1]
+[2026-06-04 09:30] Mahmood Khalil: if a balance looks off: Rebuild, check the statement, then Adjust if needed. Adjust is display-only, the ledger is untouched
+[2026-06-06 12:40] Fatima Haji: wrote up the Rebuild → Adjust workflow in ONBOARDING so support has it

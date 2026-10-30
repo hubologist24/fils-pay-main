@@ -1,0 +1,6 @@
+merchant_id,display_name,test_mode,cached_payable_fils_before,cached_payable_fils_after,delta_fils,rebuilt_at,rebuilt_by,result
+9972daab-2c86-459f-9d78-3fe1be4e3280,"Alpha Retail Co",false,4328458,4118226,-210232,2026-09-15T10:02:51+03:00,huda@filspay.example,succeeded
+3b1f0c62-7a4e-4d0b-9e55-0c8a1d2f6b19,"Beta Digital Services",false,1031117,1028905,-2212,2026-09-15T10:02:51+03:00,huda@filspay.example,succeeded
+5e2d7a90-14c3-4f6e-8b21-a7c9e0d4f382,"Gamma Hospitality Group",true,0,0,0,2026-09-15T10:02:51+03:00,huda@filspay.example,succeeded
+ce668d19-d805-469d-bc7e-d3b1741a6f16,"Delta Wholesale Traders",false,5678819,5685201,6382,2026-09-15T10:02:51+03:00,huda@filspay.example,succeeded
+81a4c6e2-0f9b-4b3d-a6e7-2d5c8f1e9a04,"Delta Marketplace Bahrain",false,5008036,5011440,3404,2026-09-15T10:02:51+03:00,huda@filspay.example,succeeded

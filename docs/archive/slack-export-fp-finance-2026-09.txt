@@ -1,0 +1,73 @@
+Slack export — #fp-finance
+Range: 2026-08-25 00:00 — 2026-09-23 23:59 (Asia/Bahrain)
+Exported by: huda  |  Format: plain text, threads inlined, reactions as [:name: N]
+Attachments referenced are in docs/exports/ where they were saved.
+--------------------------------------------------------------------------------
+
+[2026-08-27 13:55] Huda: importing the second batch of August adjustments now (aug-adjustments-v3-FINAL.csv). same format as the first, BD with two decimals straight from my sheet
+[2026-08-27 14:03] Huda: done, 33 rows posted. total on the confirmation screen looks small to me but the rows all say posted
+[2026-08-27 14:10] Fatima Haji: the import test covers that format exactly ("4.75" etc), it's fine
+    [:+1: 1]
+[2026-08-27 14:12] Huda: ok. the screen total was 414,190 and my sheet total is 4,141.90, maybe it's showing BD vs fils
+[2026-08-27 14:14] Fatima Haji: yes the screen shows fils, your sheet shows BD. same digits, it's just formatting
+[2026-08-27 14:15] Huda: ok, same digits
+[2026-08-27 14:31] Fatima Haji: I'll check after standup
+--------------------------------------------------------------------------------
+[2026-09-02 09:20] Huda: ran the August sweep (scripts/out/reconcile-2026-08.log). tied out, gap 0 👍
+    [:tada: 3]
+[2026-09-02 09:22] Huda: so August is fine. March is still the odd one. same script, same approach, so March must be data not code
+[2026-09-02 09:30] Mahmood Khalil: agree. March had the opening-week volume and the 0038 back-and-forth. probably something from the migration revert
+[2026-09-02 09:41] Ali Marzooq: the August log says "window (UTC)". same as March. if the window was wrong it'd be wrong both months
+[2026-09-02 09:43] Huda: exactly
+[2026-09-02 09:44] Ali Marzooq: (I mean that as a question, not a conclusion)
+--------------------------------------------------------------------------------
+[2026-09-04 11:21] Huda: re-imported the August file because the first import didn't show on the dashboard. the audit log now shows two imports of it a few seconds apart, both 31 rows (I think I double-clicked). is that a problem?
+[2026-09-04 11:40] Mahmood Khalil: imports post ledger rows, so the second one is real. I'll reverse it with a credit, don't worry
+[2026-09-04 11:41] Huda: thanks
+    [:pray: 1]
+[2026-09-04 15:02] Mahmood Khalil: reversed 👍
+--------------------------------------------------------------------------------
+THREAD: Visa residue reconciliation (started 2026-09-08)
+[2026-09-08 10:02] Huda: the scheme statement for 1–7 Sept is higher than our scheme file total by a few hundred fils every day. If we truncate, they should be getting less than gross, not more?
+[2026-09-08 10:15] Mahmood Khalil: Visa rounds half-up on their side for some BIN ranges, that's the "it depends on the BIN range" answer we got in Feb. So their figure can be above ours
+[2026-09-08 10:17] Huda: so the residue is negative for those ranges?
+[2026-09-08 10:18] Mahmood Khalil: effectively. we'd need the BIN breakdown to be sure. I'll ask the acquirer
+    [:eyes: 2]
+[2026-09-08 10:40] Ali Marzooq: I opened the Delta Wholesale file for the 14th next to its scheme_export_lines rows (both in docs/exports/scheme/). the `amount` column in the file doesn't match amount_fils. line 1 has amount_fils 93,270 but the file says 93.28. that's rounded up, not truncated
+[2026-09-08 10:44] Mahmood Khalil: the file amount is the acquirer's display figure (0050). the settlement figure is amount_fils. the scheme settles on amount_fils
+[2026-09-08 10:45] Ali Marzooq: the file only has `amount` in it though. there's no amount_fils in the file we send
+[2026-09-08 10:52] Fatima Haji: NUMERIC(10,2) truncates, so they should be the same anyway. Probably a display rounding in whatever opened the TSV
+[2026-09-08 10:53] Ali Marzooq: I opened it in vim
+[2026-09-08 11:10] Huda: can someone just tell me which number I book the residue against
+[2026-09-08 11:30] Mahmood Khalil: amount_fils for now. we'll confirm with the acquirer, adding it to the "verify residue with Visa" TODO
+[2026-09-09 08:02] Huda: any word from the acquirer?
+[2026-09-09 08:40] Ali Marzooq: contact is out until November
+[2026-09-10 16:15] Fatima Haji: I summed the file for the 14th: 20,000.20 BD. batch gross is 20,000.123. so the file is 0.077 BD high on a single day. Visa half-up would explain it?
+[2026-09-10 16:20] Mahmood Khalil: yes that's consistent with the BIN-range rounding
+[2026-09-10 16:21] Ali Marzooq: Visa didn't make the file though, we did
+[2026-09-10 16:40] Huda: parking this until after Q3 close. I'll keep booking against amount_fils
+    [:white_check_mark: 2]
+(thread ends)
+--------------------------------------------------------------------------------
+[2026-09-11 09:45] Huda: ran Recalculate MDR for Delta Marketplace 1 Aug – 10 Sep after the contract change (2.75% unchanged, discount now applied). 9 batches adjusted, -41.870 BD. their history should match the contract now
+[2026-09-11 09:50] Mahmood Khalil: nice, that's what it's for
+[2026-09-11 10:02] Ali Marzooq: their August batches were already paid though. does it touch paid batches?
+[2026-09-11 10:05] Mahmood Khalil: it posts an adjustment, the paid figure stays as it was
+    [:+1: 2]
+--------------------------------------------------------------------------------
+[2026-09-15 10:05] Huda: hit Rebuild cached balances after the Recalculate run because Delta Marketplace looked off. balances changed. audit log says succeeded
+[2026-09-15 10:20] Mahmood Khalil: support can Adjust each one back to the statement figure, that's the documented flow
+[2026-09-15 10:35] Noor (support): adjusting them back now, following ONBOARDING
+[2026-09-15 12:10] Noor (support): done, all show the statement figure again ✅
+    [:raised_hands: 3]
+--------------------------------------------------------------------------------
+[2026-09-19 12:15] Sayed (support): ran Recompute transaction statuses for Gamma and Alpha (old refund-era statuses). both succeeded. Gamma said "testModeCleared: true" — what does that mean?
+[2026-09-19 12:30] Fatima Haji: it means their sandbox flag got tidied since there's nothing open. ADMIN.md says it's safe to run more than once
+[2026-09-19 12:31] Sayed (support): ok 👍
+[2026-09-19 12:33] Huda: Gamma is the test merchant, they shouldn't be in settlement at all. Will they be now?
+[2026-09-19 13:40] Mahmood Khalil: they have nothing captured that isn't already batched, so no change in practice
+--------------------------------------------------------------------------------
+[2026-09-22 08:58] Fatima Haji: did another Rebuild on staging before the FP-209 test, numbers same as prod snapshot. consistent 👍
+[2026-09-23 09:10] Huda: Q3 close prep. March still doesn't tie on my side. 4.75 BD-ish. not urgent
+[2026-09-23 09:12] Mahmood Khalil: 4.75 is suspiciously like the adjustment-import example value. maybe it's one of the test rows from May
+[2026-09-23 09:13] Huda: could be. I'll look at the May imports
